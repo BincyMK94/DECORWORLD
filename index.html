@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Declutter Assistant</title>
+    
+<script src="https://cdn.tailwindcss.com"></script>
+    
+<style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fc;
+        }
+        .container-custom {
+            max-width: 900px;
+        }
+        .btn-base {
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .btn-base:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(50, 50, 93, 0.11), 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+        .loading-dots div {
+            animation: bounce 0.6s infinite alternate;
+        }
+        .loading-dots div:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        .loading-dots div:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        @keyframes bounce {
+            to {
+                opacity: 0.3;
+                transform: translateY(-6px);
+            }
+        }
+        /* Custom scrollbar for aesthetic results panel */
+        #ai-response-content {
+            max-height: 450px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            text-align: left;
+        }
+        .result-panel {
+            min-height: 250px;
+            background-color: #f9fafb;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8 min-h-screen">
+
+    <div class="container-custom mx-auto bg-white shadow-2xl rounded-3xl p-6 md:p-10 border border-gray-100">
+
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-extrabold text-indigo-700 mb-2">AI Declutter & Design Studio</h1>
+            <p class="text-gray-600 text-lg">Upload your room photo for organization, style, and visual transformation.</p>
+        </header>
+
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Left Panel: Input and Controls -->
+            <div class="space-y-6">
+                <div class="p-6 bg-indigo-50 rounded-2xl border border-dashed border-indigo-300">
+                    <label for="file-upload" class="flex flex-col items-center cursor-pointer p-8">
+                        <svg class="w-10 h-10 text-indigo-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                        <span class="text-indigo-600 font-semibold text-lg">Choose Room Photo</span>
+                        <span class="text-sm text-gray-500 mt-1" id="file-status">No file selected.</span>
+                        <input id="file-upload" type="file" accept="image/jpeg, image/png" class="hidden" onchange="handleFileSelect(event)">
+                    </label>
+                </div>
+
+                <div id="image-preview-container" class="mt-4 hidden">
+                    <h2 class="text-xl font-semibold text-gray-700 mb-3">Image Preview:</h2>
+                    <img id="image-preview" class="w-full h-auto object-cover rounded-xl shadow-lg border border-gray-200" src="" alt="Room photo preview">
+                </div>
+
+                <button id="analyze-btn" onclick="startAnalysis()"
+                    class="btn-base w-full px-6 py-3 text-lg font-bold text-white bg-green-500 rounded-xl shadow-md hover:bg-green-600 focus:outline-none focus:ring-4 focus:ring-green-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled>
+                    Analyze Room
+                </button>
+                
+                <!-- Gemini Feature Buttons -->
+                <div class="grid grid-cols-2 gap-4">
+                    <button id="style-btn" onclick="generateStyleVision()"
+                        class="btn-base px-4 py-3 text-sm font-semibold text-blue-800 bg-blue-100 rounded-xl shadow-sm hover:bg-blue-200 focus:outline-none focus:ring-4 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled>
+                        ✨ Style Vision
+                    </button>
+                    <button id="shopping-btn" onclick="generateShoppingList()"
+                        class="btn-base px-4 py-3 text-sm font-semibold text-purple-800 bg-purple-100 rounded-xl shadow-sm hover:bg-purple-200 focus:outline-none focus:ring-4 focus:ring-purple-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled>
+                        🛒 Shopping List
+                    </button>
+                </div>
+                <!-- New Visualization Button -->
+                <button id="visualize-btn" onclick="generateVisualization()"
+                        class="btn-base w-full px-6 py-3 text-lg font-bold text-white bg-pink-500 rounded-xl shadow-md hover:bg-pink-600 focus:outline-none focus:ring-4 focus:ring-pink-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled>
+                        🖼️ Visualize New Room
+                </button>
+
+                <div id="message-box" class="hidden p-4 rounded-xl text-center font-medium"></div>
+
+            </div>
+
+            <!-- Right Panel: Results -->
+            <div class="lg:col-span-1 space-y-4">
+                <h2 id="results-title" class="text-2xl font-bold text-gray-800 mb-4 border-b pb-2">AI Results</h2>
+                <div id="ai-response-container" class="result-panel p-5 rounded-2xl border border-gray-200 flex flex-col justify-center items-center text-center">
+                    <p id="ai-response-content" class="text-gray-500 text-base">Upload an image and press "Analyze Room" to get started!</p>
+                </div>
+            </div>
+
+        </section>
+    </div>
+
+    <script type="module">
+        // Global state
+        let base64ImageData = null;
+        let currentAnalysisData = ""; // Stores the text output from the initial analysis
+
+        // API Configuration (Leave API Key empty, it's auto-filled by the environment)
+        const apiKey = ""; 
+
+        // Utility functions
+        function showLoading(elementId, isLoading, message = "Processing...") {
+            const container = document.getElementById(elementId);
+            const contentElement = document.getElementById('ai-response-content');
+            const titleElement = document.getElementById('results-title');
+            
+            if (isLoading) {
+                container.innerHTML = `
+                    <div class="loading-dots flex space-x-2 p-4">
+                        <div class="w-3 h-3 bg-indigo-500 rounded-full"></div>
+                        <div class="w-3 h-3 bg-indigo-500 rounded-full"></div>
+                        <div class="w-3 h-3 bg-indigo-500 rounded-full"></div>
+                    </div>
+                    <p class="text-indigo-600 font-semibold">${message}</p>
+                `;
+                titleElement.textContent = "Processing...";
+                container.classList.add('justify-center', 'items-center');
+                container.classList.remove('p-5');
+            } else {
+                container.innerHTML = `<p id="ai-response-content" class="text-gray-700 text-sm md:text-base">${message}</p>`;
+                container.classList.remove('justify-center', 'items-center');
+                container.classList.add('p-5');
+            }
+
+            // Disable buttons during processing
+            const buttonsToDisable = ['analyze-btn', 'style-btn', 'shopping-btn', 'visualize-btn'];
+            buttonsToDisable.forEach(id => {
+                const btn = document.getElementById(id);
+                if (btn) btn.disabled = isLoading;
+            });
+
+            // Re-enable specific feature buttons only after analysis is done
+            if (!isLoading && currentAnalysisData) {
+                document.getElementById('style-btn').disabled = false;
+                document.getElementById('shopping-btn').disabled = false;
+                document.getElementById('visualize-btn').disabled = false;
+            }
+        }
+
+        function base64ToArrayBuffer(base64) {
+            const binaryString = atob(base64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        async function fetchWithRetry(url, options, retries = 3) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.ok) {
+                        return response;
+                    }
+                    console.warn(`Request failed with status ${response.status}. Retrying in ${2 ** i}s...`);
+                    await new Promise(resolve => setTimeout(resolve, (2 ** i) * 1000));
+                } catch (error) {
+                    console.error(`Fetch attempt ${i + 1} failed:`, error);
+                    if (i === retries - 1) throw error;
+                    await new Promise(resolve => setTimeout(resolve, (2 ** i) * 1000));
+                }
+            }
+            throw new Error("API request failed after multiple retries.");
+        }
+
+        // --- File Handling ---
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            const statusElement = document.getElementById('file-status');
+            const analyzeBtn = document.getElementById('analyze-btn');
+            
+            if (file) {
+                if (file.size > 4 * 1024 * 1024) { // 4MB limit
+                    statusElement.textContent = "File is too large (Max 4MB).";
+                    analyzeBtn.disabled = true;
+                    base64ImageData = null;
+                    return;
+                }
+
+                statusElement.textContent = file.name;
+                analyzeBtn.disabled = false;
+                currentAnalysisData = ""; // Reset analysis data
+
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const img = document.getElementById('image-preview');
+                    img.src = reader.result;
+                    document.getElementById('image-preview-container').classList.remove('hidden');
+
+                    // Extract Base64 data (remove prefix)
+                    base64ImageData = reader.result.split(',')[1];
+                };
+                reader.readAsDataURL(file);
+            } else {
+                statusElement.textContent = "No file selected.";
+                analyzeBtn.disabled = true;
+                document.getElementById('image-preview-container').classList.add('hidden');
+                base64ImageData = null;
+            }
+        }
+        window.handleFileSelect = handleFileSelect; // Expose to global scope
+
+
+        // --- Gemini API Call - Multimodal (Image Analysis) ---
+        async function startAnalysis() {
+            if (!base64ImageData) {
+                document.getElementById('message-box').textContent = 'Please select an image first.';
+                document.getElementById('message-box').classList.remove('hidden');
+                return;
+            }
+
+            document.getElementById('message-box').classList.add('hidden');
+            showLoading('ai-response-container', true, "Analyzing clutter, identifying storage needs...");
+
+            const userQuery = "Analyze this room for clutter and disorganization. Provide a detailed, easy-to-follow, numbered step-by-step plan for decluttering. Focus on what needs to be organized, categorized, or removed.";
+            const systemPrompt = "You are a professional home organization expert. Your analysis must be practical, actionable, and based only on the visual evidence in the image. Respond in Markdown format using numbered lists for the steps.";
+            
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [
+                    {
+                        role: "user",
+                        parts: [
+                            { text: userQuery },
+                            {
+                                inlineData: {
+                                    mimeType: "image/jpeg", // Assuming all images are treated as jpeg for payload
+                                    data: base64ImageData
+                                }
+                            }
+                        ]
+                    }
+                ],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                }
+            };
+
+            try {
+                const response = await fetchWithRetry(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "Error: Could not retrieve analysis.";
+                
+                currentAnalysisData = text; // Store for other features
+                document.getElementById('results-title').textContent = "Organization Suggestions";
+                showLoading('ai-response-container', false, marked.parse(text)); // Use marked.parse for markdown rendering
+
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                showLoading('ai-response-container', false, `An error occurred during analysis: ${error.message}`);
+                currentAnalysisData = "";
+            }
+        }
+        window.startAnalysis = startAnalysis;
+
+
+        // --- Gemini API Call - Text Generation (Style Vision) ---
+        async function generateStyleVision() {
+            if (!currentAnalysisData) {
+                document.getElementById('message-box').textContent = 'Please run the "Analyze Room" step first.';
+                document.getElementById('message-box').classList.remove('hidden');
+                return;
+            }
+
+            document.getElementById('message-box').classList.add('hidden');
+            showLoading('ai-response-container', true, "Generating Interior Style and Design Vision...");
+
+            const userQuery = `Based on the room analysis provided below, suggest a suitable, modern interior design style (e.g., Scandinavian, Industrial, Boho). Then, describe in a single paragraph what the room will look like, focusing on colors, textures, and key furniture pieces for this new style. The original analysis was: \n\n${currentAnalysisData}`;
+            const systemPrompt = "You are an expert interior designer. Provide a concise, inspiring style vision. Identify the style with a bold heading, and then provide the description.";
+            
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                }
+            };
+
+            try {
+                const response = await fetchWithRetry(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "Error: Could not generate style vision.";
+
+                document.getElementById('results-title').textContent = "✨ Style Vision";
+                showLoading('ai-response-container', false, marked.parse(text));
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                showLoading('ai-response-container', false, `An error occurred during style generation: ${error.message}`);
+            }
+        }
+        window.generateStyleVision = generateStyleVision;
+
+
+        // --- Gemini API Call - Text Generation (Shopping List) ---
+        async function generateShoppingList() {
+            if (!currentAnalysisData) {
+                document.getElementById('message-box').textContent = 'Please run the "Analyze Room" step first.';
+                document.getElementById('message-box').classList.remove('hidden');
+                return;
+            }
+
+            document.getElementById('message-box').classList.add('hidden');
+            showLoading('ai-response-container', true, "Compiling a personalized shopping list...");
+
+            const userQuery = `Based on the room organization plan provided below, generate a structured shopping list of organizational items needed (e.g., storage bins, shelving, desk organizers). Group them logically (e.g., 'Desk Organization', 'Wall Storage'). Be specific about quantities and types. The analysis was: \n\n${currentAnalysisData}`;
+            const systemPrompt = "You are a pragmatic organizational consultant. Respond only with a markdown list and sub-lists. Do not include introductory or concluding sentences. List items clearly.";
+            
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                }
+            };
+
+            try {
+                const response = await fetchWithRetry(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "Error: Could not generate shopping list.";
+
+                document.getElementById('results-title').textContent = "🛒 Organization Shopping List";
+                showLoading('ai-response-container', false, marked.parse(text));
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                showLoading('ai-response-container', false, `An error occurred during shopping list generation: ${error.message}`);
+            }
+        }
+        window.generateShoppingList = generateShoppingList;
+
+
+        // --- Gemini API Call - Image Generation (New Room Visualization) ---
+        async function generateVisualization() {
+            if (!currentAnalysisData) {
+                document.getElementById('message-box').textContent = 'Please run the "Analyze Room" step first to generate the visual prompt.';
+                document.getElementById('message-box').classList.remove('hidden');
+                return;
+            }
+
+            document.getElementById('message-box').classList.add('hidden');
+            showLoading('ai-response-container', true, "Generating a photo-realistic visualization of your new room...");
+
+            const visualizationPrompt = `A photo-realistic image of a room that has been thoroughly decluttered and organized. The room should be bright, modern, and have the feel of a professional interior design magazine spread. Incorporate elements of the recommended style (Scandinavian Minimalist is a good default). Ensure clean lines, organized storage, and soft, natural lighting. The room is now perfectly tidy and stylish. Use the following as context for what was removed/organized: ${currentAnalysisData.substring(0, 300)}...`;
+
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
+            
+            const payload = { 
+                instances: { prompt: visualizationPrompt }, 
+                parameters: { "sampleCount": 1} 
+            };
+            
+            try {
+                const response = await fetchWithRetry(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                
+                const base64Data = result?.predictions?.[0]?.bytesBase64Encoded;
+
+                if (!base64Data) {
+                    throw new Error("Image generation failed or returned no data.");
+                }
+                
+                const imageUrl = `data:image/png;base64,${base64Data}`;
+
+                document.getElementById('results-title').textContent = "🖼️ New Room Visualization";
+                showLoading('ai-response-container', false, 
+                    `<img src="${imageUrl}" class="w-full h-auto object-cover rounded-xl shadow-lg border border-gray-200" alt="New, organized room visualization">
+                    <p class="mt-4 text-sm text-gray-500">Visualization generated using the prompt: ${visualizationPrompt.substring(0, 100)}...</p>`
+                );
+
+            } catch (error) {
+                console.error("Image API Error:", error);
+                showLoading('ai-response-container', false, `An error occurred during image generation: ${error.message}. Please try again.`);
+            }
+        }
+        window.generateVisualization = generateVisualization;
+
+        // --- Markdown Renderer Setup (marked.js) ---
+        // Load Marked.js for safe and effective Markdown rendering
+        function loadScript(src, callback) {
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = callback;
+            document.head.appendChild(script);
+        }
+
+        loadScript('https://cdn.jsdelivr.net/npm/marked/marked.min.js', () => {
+            // marked is now available
+            if (typeof marked !== 'undefined') {
+                marked.setOptions({
+                    renderer: new marked.Renderer(),
+                    gfm: true,
+                    breaks: true,
+                    sanitize: true // Simple sanitization
+                });
+            } else {
+                console.error("Marked.js failed to load.");
+            }
+        });
+        
+    </script>
+</body>
+</html>
+
